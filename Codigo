@@ -1,0 +1,288 @@
+/*Entrada Infravermelho*/
+int Sensor1 = 7; //Sensor Conectado analog A7
+int Sensor2 = 6; //Sensor Conectado analog A6
+int Sensor3 = 5; //Sensor Conectado analog A5
+int Sensor4 = 4; //Sensor Conectado analog A4
+int Sensor5 = 3; //Sensor Conectado analog A3
+
+/*Entrada Encoder*/
+int EncoderEsq = 2;
+int EncoderDir = 4;
+int EncoderFront = 7;
+/*Saida Motor*/
+int AcionaMotorDirPos = 10;
+int AcionaMotorEsqPos = 6;
+int AcionaMotorFrontDir = 3;
+int AcionaMotorDirNeg = 5;
+int AcionaMotorEsqNeg = 11;
+int AcionaMotorFrontEsq = 9;
+
+//Dados Encoder
+unsigned int  rpm = 0;
+volatile byte pulsosdir, pulsosesq, pulsosfront = 0;
+unsigned long timeolddir, timeoldesq, timeoldfront = 0;
+volatile uint8_t last_PIND = PIND;
+
+//Altere o numero abaixo de acordo com o seu disco encoder
+unsigned int pulsos_por_volta = 32;
+
+
+float DistanciaCM = 0;
+bool MostraRPMEsq, MostraRPMDir, MostraRPMFront, MostraSensor1, MostraSensor2, MostraSensor3 ,MostraSensor4, MostraSensor5, MotorDp, MotorEp, MotorFp, MotorDn, MotorEn, MotorFn = false;
+
+void setup()
+{
+  cli();
+  Serial.begin(9600); // Setup communication with computer to present results serial monitor
+  pinMode(EncoderEsq, INPUT_PULLUP);
+  pinMode(EncoderDir, INPUT_PULLUP);
+  pinMode(EncoderFront, INPUT_PULLUP);
+  pinMode(Sensor1,INPUT);
+  pinMode(Sensor2,INPUT);
+  pinMode(Sensor3,INPUT);
+  pinMode(Sensor4,INPUT);
+  pinMode(Sensor5,INPUT);
+  pinMode(AcionaMotorDirPos,OUTPUT);
+  pinMode(AcionaMotorEsqPos,OUTPUT);
+  pinMode(AcionaMotorFrontDir,OUTPUT);
+  pinMode(AcionaMotorDirNeg,OUTPUT);
+  pinMode(AcionaMotorEsqNeg,OUTPUT);
+  pinMode(AcionaMotorFrontEsq,OUTPUT);
+
+  PCICR |= (1 << PCIE2);
+  PCMSK2 |= ( (1<<PCINT18) | (1 << PCINT20) | (1 << PCINT23));
+  sei();
+}
+
+float SensorRead(int Sensor)
+{
+  int intSensorResult = 0;
+  float fltSensorCalc, ValSensor, ValMedio = 0;
+
+  for (int n=0; n<10; n++)
+  {
+    intSensorResult = analogRead(Sensor);
+    fltSensorCalc = (6787.0 / (intSensorResult - 3.0)) - 0.42;
+    ValSensor += fltSensorCalc;
+  }
+  ValMedio = ValSensor / 10.0;
+  return ValMedio;
+}
+
+void AcionaMotores(int Motor, bool Check)
+{
+  if(Check == false) digitalWrite(Motor,LOW);
+  else analogWrite(Motor,50);
+}
+
+ISR(PCINT2_vect) {
+  uint8_t changed_bits;
+  changed_bits = PIND ^ last_PIND;
+  last_PIND = PIND;
+
+  if (changed_bits & (1 << PIND4))
+  {
+    if (PIND & (1 << PIND4)) {
+    // D4 mudou de LOW para HIGH;
+      pulsosdir++;
+    }
+  }
+  else if (changed_bits & (1 << PIND7))
+  {
+    if (PIND & (1 << PIND7)) {
+    // D7 mudou de LOW para HIGH;  
+      pulsosfront++;
+    }
+  }
+  else if (changed_bits & (1<<PIND2))
+  {
+    if (PIND & (1 << PIND2)) {
+    // D2 mudou de LOW para HIGH;
+      pulsosesq++;
+    }
+  }
+}
+
+void loop()
+{
+  if(Serial.available())
+  {
+    switch(Serial.read())
+    {
+      case '1':
+        if(MostraSensor1 == false) MostraSensor1 = true;
+        else MostraSensor1 = false;
+        break;
+      case '2':
+        if(MostraSensor2 == false) MostraSensor2 = true;
+        else MostraSensor2 = false;
+        break;
+      case '3':
+        if(MostraSensor3 == false) MostraSensor3 = true;
+        else MostraSensor3 = false;
+        break;
+      case '4':
+        if(MostraSensor4 == false) MostraSensor4 = true;
+        else MostraSensor4 = false;
+        break;
+      case '5':
+        if(MostraSensor5 == false) MostraSensor5 = true;
+        else MostraSensor5 = false;
+        break;
+      case 'e':
+        if(MotorDn == true)
+        {
+          MotorDn = false;
+          AcionaMotores(AcionaMotorDirNeg,MotorDn);
+        }
+        if(MotorDp == false) MotorDp = true;
+        else MotorDp = false;
+        
+        AcionaMotores(AcionaMotorDirPos,MotorDp);
+        break;
+      case 'd':
+        if(MotorDp == true)
+        {
+          MotorDp = false;
+          AcionaMotores(AcionaMotorDirPos,MotorDp);
+        }
+        if(MotorDn == false) MotorDn = true;
+        else MotorDn = false;
+        
+        AcionaMotores(AcionaMotorDirNeg,MotorDn);
+        break;
+      case 'q':
+        if(MotorEn == true)
+        {
+          MotorEn = false;
+          AcionaMotores(AcionaMotorEsqNeg,MotorEn);
+        }
+        if(MotorEp == false) MotorEp = true;
+        else MotorEp = false;
+        
+        AcionaMotores(AcionaMotorEsqPos,MotorEp);
+        break;
+      case 'a':
+        if(MotorEp == true)
+        {
+          MotorEp = false;
+          AcionaMotores(AcionaMotorEsqPos,MotorEp);
+        }
+        if(MotorEn == false) MotorEn = true;
+        else MotorEn = false;
+        
+        AcionaMotores(AcionaMotorEsqNeg,MotorEn);
+        break;
+      case 'w':
+        if(MotorFn == true)
+        {
+          MotorFn = false;
+          AcionaMotores(AcionaMotorFrontEsq,MotorFn);
+        }
+        if(MotorFp == false) MotorFp = true;
+        else MotorFp = false;
+        
+        AcionaMotores(AcionaMotorFrontDir,MotorFp);
+        break;
+      case 's':
+        if(MotorFp == true)
+        {
+          MotorFp = false;
+          AcionaMotores(AcionaMotorFrontDir,MotorFp);
+        }
+        if(MotorFn == false) MotorFn = true;
+        else MotorFn = false;
+        
+        AcionaMotores(AcionaMotorFrontEsq,MotorFn);
+        break;
+      case 'r':
+        if(MostraRPMEsq == false) MostraRPMEsq = true;
+        else MostraRPMEsq = false;
+        break;
+      case 't':
+        if(MostraRPMFront == false) MostraRPMFront = true;
+        else MostraRPMFront = false;
+        break;
+      case 'y':
+        if(MostraRPMDir == false) MostraRPMDir = true;
+        else MostraRPMDir = false;
+        break;
+    }  
+  }
+  
+  if(MostraSensor1 == true)
+  {
+    DistanciaCM = SensorRead(Sensor1);
+    Serial.print("Sensor 1: ");
+    Serial.print(DistanciaCM);
+    Serial.println(" cm");
+  }
+  if(MostraSensor2 == true)
+  {
+    DistanciaCM = SensorRead(Sensor2);
+    Serial.print("Sensor 2: ");
+    Serial.print(DistanciaCM);
+    Serial.println(" cm");
+  }
+  if(MostraSensor3 == true)
+  {
+    DistanciaCM = SensorRead(Sensor3);
+    Serial.print("Sensor 3: ");
+    Serial.print(DistanciaCM);
+    Serial.println(" cm");
+  }
+  if(MostraSensor4 == true)
+  {
+    DistanciaCM = SensorRead(Sensor4);
+    Serial.print("Sensor 4: ");
+    Serial.print(DistanciaCM);
+    Serial.println(" cm");
+  }
+  if(MostraSensor5 == true)
+  {
+    DistanciaCM = SensorRead(Sensor5);
+    Serial.print("Sensor 5: ");
+    Serial.print(DistanciaCM);
+    Serial.println(" cm");
+  }
+  if(MostraRPMEsq == true)
+  {
+    if (millis() - timeoldesq >= 1000)
+    {
+      rpm = (unsigned int)(1875) / (millis() - timeoldesq) * pulsosesq;
+      timeoldesq = millis();
+      pulsosesq = 0;
+  
+      //Mostra o valor de RPM no serial monitor
+      Serial.print("RPM Motor Esquerda = ");
+      Serial.println(rpm, DEC);
+    }
+  }
+  if(MostraRPMDir == true)
+  {
+    if (millis() - timeolddir >= 1000)
+    {
+      rpm = (unsigned int)(1875) / (millis() - timeolddir) * pulsosdir;
+      timeolddir = millis();
+      pulsosdir = 0;
+  
+      //Mostra o valor de RPM no serial monitor
+      Serial.print("RPM Motor Direita = ");
+      Serial.println(rpm, DEC);
+    }
+  }
+  if(MostraRPMFront == true)
+  {
+    if (millis() - timeoldfront >= 1000)
+    {
+      rpm = (unsigned int)(1875) / (millis() - timeoldfront) * pulsosfront;
+      timeoldfront = millis();
+      pulsosfront = 0;
+  
+      //Mostra o valor de RPM no serial monitor
+      Serial.print("RPM Motor Frontal = ");
+      Serial.println(rpm, DEC);
+    }
+  }
+  delay(150);
+}
